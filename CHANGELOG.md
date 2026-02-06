@@ -1,5 +1,39 @@
 # Changelog
 
+## Version 1.2.0 (2026-02-06)
+
+### 🔐 Crypto-Specific Credential Detection
+
+**Enhanced detection patterns** for blockchain and cryptocurrency credentials.
+
+### Added
+
+**New sensitive key patterns in scan.py:**
+- `private_key` / `private-key` - Wallet private keys
+- `passphrase` - Seed passphrases
+- `mnemonic` - BIP39 recovery phrases
+- `seed_phrase` / `seed-phrase` - Wallet seed phrases
+- `signing_key` / `signing-key` - Transaction signing keys
+- `wallet_key` / `wallet-key` - Wallet access keys
+
+**Documentation:**
+- Added "Detection Parameters" section to SKILL.md
+- High-level overview of file patterns, sensitive keys, and security checks
+
+### Why This Matters
+
+Crypto credentials (private keys, mnemonics, seed phrases) are **permanent secrets** — once leaked, funds can be drained instantly with no recovery. Previous detection focused on API keys (revocable), missing the most critical crypto patterns.
+
+This update ensures wallet keys and seed phrases are treated with the same security rigor as other credentials.
+
+### Technical Details
+
+**Pattern count:** 15 sensitive patterns (up from 9)
+**Detection coverage:** Now includes crypto-native credential types
+**Backward compatible:** Existing scans continue to work
+
+---
+
 ## Version 1.1.0 (2026-02-05)
 
 ### 🔒 SECURITY FOUNDATION UPDATE

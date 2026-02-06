@@ -3,7 +3,7 @@
 **Status:** ✅ Production Ready  
 **Category:** 🔒 Core Security Infrastructure  
 **Package:** `credential-manager.skill`  
-**Version:** 1.0.0
+**Version:** 1.2.0
 
 ## What This Is
 
@@ -21,6 +21,19 @@ Scattered credentials = scattered attack surface. One `.env` file with proper pe
 
 See `CORE-PRINCIPLE.md` for the full security rationale.
 
+## 🔐 Crypto-Specific Detection (New in v1.2.0)
+
+Enhanced detection for blockchain and cryptocurrency credentials:
+
+- **Private keys** (`private_key`, `private-key`)
+- **Passphrases** (`passphrase`)
+- **Mnemonics** (`mnemonic`)
+- **Seed phrases** (`seed_phrase`, `seed-phrase`)
+- **Signing keys** (`signing_key`, `signing-key`)
+- **Wallet keys** (`wallet_key`, `wallet-key`)
+
+**Why it matters:** Crypto credentials are permanent secrets. Once leaked, funds can be drained instantly with no recovery. These patterns ensure wallet keys and seed phrases get the same security treatment as API keys.
+
 ## What It Does
 
 1. **Scans** for credentials across common locations
@@ -33,8 +46,13 @@ See `CORE-PRINCIPLE.md` for the full security rationale.
 ## Quick Start
 
 ```bash
-# Install the skill
-# (Copy credential-manager/ to your OpenClaw skills directory)
+# Install from ClawHub
+clawhub install credential-manager
+
+# Or manually copy credential-manager/ to your OpenClaw skills directory
+
+# Navigate to the skill
+cd ~/.openclaw/skills/credential-manager  # or your skills directory
 
 # Scan for credentials
 ./scripts/scan.py
