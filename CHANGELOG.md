@@ -1,5 +1,141 @@
 # Changelog
 
+## Version 2.0.0 (2026-02-11)
+
+### 🔐 GPG Encryption, Deep Scanning, Rotation Tracking & Backup Hardening
+
+**Major security upgrade.** Private keys and wallet secrets are now GPG-encrypted at rest. Scanner catches hardcoded secrets in source files. All backup permissions hardened. Credential rotation is tracked with risk-based schedules.
+
+### Added
+
+**New scripts:**
+
+- **`encrypt.py`** — GPG encrypt/decrypt high-value secrets
+  - Moves private keys from plaintext `.env` to `~/.openclaw/.env.secrets.gpg` (AES256)
+  - Replaces values in `.env` with `GPG:KEY_NAME` placeholders
+  - `--list` shows currently encrypted keys
+  - `--decrypt --keys KEY` reverses encryption
+  - Supports passphrase via `OPENCLAW_GPG_PASSPHRASE` env var or interactive prompt
+
+- **`setup-gpg.sh`** — First-time GPG configuration
+  - Checks GPG installation
+  - Configures gpg-agent cache (default 8h, `--cache-hours N`)
+  - Enables loopback pinentry for headless servers
+  - Runs encrypt/decrypt test cycle
+
+- **`rotation-check.py`** — Credential rotation tracking
+  - `--init` creates `~/.openclaw/.env.meta` with auto-classified risk levels
+  - Critical keys (private keys, mnemonics): 90-day rotation
+  - Standard keys (API keys, tokens): 180-day rotation
+  - Low-risk keys: 365-day rotation
+  - `--rotated KEY` records a rotation event
+  - Shows overdue/upcoming/OK status with color-coded output
+
+**New scan capabilities:**
+
+- **Deep scan** (`--deep` flag): Greps `.sh`, `.js`, `.py`, `.mjs`, `.ts` files for:
+  - API key prefixes (`sk_`, `pk_`, `Bearer`)
+  - Possible private keys (`0x` + 64 hex chars)
+  - Hardcoded credential assignments
+  - Mnemonic/seed phrases
+  - Excludes `node_modules/`, `.git/`
+
+- **Expanded scan patterns:**
+  - `~/.openclaw/*.json` (catches `farcaster-credentials.json` etc.)
+  - `~/.openclaw/*-credentials*`
+  - `~/.openclaw/workspace/*/.env`
+  - `~/.openclaw/workspace/*/repo/.env`
+
+- **Symlink detection:** Reports symlinked `.env` files and validates they point to the main `.env`
+
+**New validation checks:**
+
+- **Entropy analysis:** Flags low-entropy values for SECRET/PRIVATE_KEY/PASSWORD fields
+- **Private key detection:** Flags `0x` + 64 hex char values (recommends GPG encryption)
+- **Mnemonic detection:** Flags 12/24 space-separated word values
+- **Backup permission audit:** Checks all backup files (mode 600) and directories (mode 700)
+- **`--fix` now works:** Actually fixes permissions, backup permissions, directory permissions, gitignore
+
+**GPG-aware credential loading:**
+
+- `enforce.py` `get_credential()` transparently decrypts `GPG:` prefixed values
+- `is_gpg_available()` helper for checking GPG status
+- Reports GPG encryption status when run directly
+
+### Changed
+
+- **`consolidate.py`:**
+  - Backup files now created with mode 600 (was inheriting source permissions)
+  - Backup directories created with mode 700 (was 755)
+  - Parent backup directory also secured to 700
+  - Added Farcaster to `SERVICE_MAPPINGS` (custodyPrivateKey, signerPrivateKey, etc.)
+  - `.gitignore` now also covers `.env.secrets.gpg` and `.env.meta`
+  - Skips symlinks that point to the main `.env`
+  - Flattens nested JSON objects to compact JSON strings
+
+- **`validate.py`:**
+  - Fixed quote contradiction: now allows double-quoted values with spaces
+  - Removed false "Quotes not needed" check
+  - Added backup security checks as a new validation category
+  - `--fix` flag now properly fixes backup permissions
+  - `check_security()` upgraded from naive pattern matching to entropy + pattern analysis
+
+- **`scan.py`:**
+  - Added 4 new credential path patterns
+  - Symlink detection with target validation
+  - `--deep` flag for source file scanning
+  - Shannon entropy calculation utility
+
+- **`enforce.py`:**
+  - `get_credential()` now handles `GPG:` prefixed values
+  - Decrypts from `.env.secrets.gpg` using gpg-agent cache or passphrase
+  - Reports GPG encryption status
+
+- **`SKILL.md`:**
+  - Complete rewrite of Migration Workflow with exact step-by-step flow
+  - Added GPG Encryption section with setup, usage, and what-to-encrypt guide
+  - Added Credential Rotation Tracking section
+  - Added Deep Scan documentation
+  - Added Bash/Node.js/Python patterns for GPG-aware credential loading
+  - Updated security checklist
+  - Added Farcaster to supported services
+
+### Security Fixes
+
+- 🔴 **Backup files** were created with mode 644 (world-readable) — now mode 600
+- 🔴 **Backup directories** were created with mode 755 — now mode 700
+- 🔴 **Scanner blind spot:** `~/.openclaw/*.json` was not scanned — now included
+- 🔴 **farcaster-credentials.json** with private keys had mode 644 — detected and flagged
+- 🟡 **validate.py** contradicted itself on quotes — fixed
+- 🟡 **check_security()** only checked for "password123" — now does entropy + pattern analysis
+
+### Migration Story
+
+This update was built during a live security audit that discovered:
+1. `farcaster-credentials.json` with private keys at mode 644 (world-readable!)
+2. All backup files at mode 644 (should be 600)
+3. All backup directories at mode 755 (should be 700)
+4. Wallet private key sitting in plaintext `.env`
+5. Scanner couldn't detect `~/.openclaw/*.json` files
+6. `validate.py` had conflicting quote validation rules
+
+After running the upgraded skill:
+- ✅ 5 private keys GPG-encrypted (wallet + 4 Farcaster keys)
+- ✅ All backup permissions fixed (12 files/dirs)
+- ✅ `farcaster-credentials.json` migrated to `.env` and deleted
+- ✅ 57 keys tracked with risk-based rotation schedules
+- ✅ 4 scripts updated to use `.env` with GPG decryption
+- ✅ All validation checks pass
+
+### Technical Details
+
+**New files:** 3 scripts (`encrypt.py`, `setup-gpg.sh`, `rotation-check.py`)
+**Modified files:** 5 (`scan.py`, `consolidate.py`, `validate.py`, `enforce.py`, `SKILL.md`)
+**New file types:** `.env.secrets.gpg` (encrypted), `.env.meta` (rotation metadata)
+**Package size:** ~65 KB
+
+---
+
 ## Version 1.3.0 (2026-02-07)
 
 ### 🎯 Consolidation Rule - Single Source Enforcement
@@ -33,59 +169,11 @@
 - Added "THE RULE" section upfront
 - Emphasizes root-only requirement
 
-### Changed
-
-**Documentation structure:**
-- README.md now includes "The Consolidation Rule" section
-- Files included list updated with CONSOLIDATION-RULE.md
-- Testing section reflects enhanced detection
-
-### Why This Matters
-
-Scattered `.env` files across workspace, skills, and scripts directories create:
-- Multiple attack surfaces (multiple files to secure)
-- Confusion (which .env has the current keys?)
-- Git leaks (harder to protect multiple locations)
-- Backup gaps (easy to miss scattered files)
-
-**The rule:** One file. One location. One source of truth. No exceptions.
-
 ### Technical Details
 
 **New files:** 1 (CONSOLIDATION-RULE.md)
 **Modified files:** 4 (scan.py, cleanup.py, SKILL.md, README.md)
 **Detection patterns:** +5 workspace-specific patterns
-**Package size:** ~26 KB
-
-### Enforcement Flow
-
-```bash
-# 1. Scan for scattered credentials
-./scripts/scan.py
-
-# 2. Consolidate to root (with backup)
-./scripts/consolidate.py --yes
-
-# 3. Clean up scattered files
-./scripts/cleanup.py --confirm
-
-# 4. Validate security
-./scripts/validate.py
-```
-
-### Migration Story
-
-This update was prompted by discovering scattered `.env` files in a live OpenClaw deployment:
-- Root: `~/.openclaw/.env` (secure)
-- Workspace: `~/.openclaw/workspace/.env` (scattered)
-- Moltbook: `~/.config/moltbook/credentials.json` (insecure permissions)
-
-After consolidation:
-- ✅ Single .env with 23 keys
-- ✅ Mode 600 permissions
-- ✅ Git-ignored
-- ✅ All scattered files removed (backed up first)
-- ✅ All scripts already pointed to root (no fixes needed)
 
 ---
 
@@ -97,7 +185,6 @@ After consolidation:
 
 ### Added
 
-**New sensitive key patterns in scan.py:**
 - `private_key` / `private-key` - Wallet private keys
 - `passphrase` - Seed passphrases
 - `mnemonic` - BIP39 recovery phrases
@@ -105,74 +192,15 @@ After consolidation:
 - `signing_key` / `signing-key` - Transaction signing keys
 - `wallet_key` / `wallet-key` - Wallet access keys
 
-**Documentation:**
-- Added "Detection Parameters" section to SKILL.md
-- High-level overview of file patterns, sensitive keys, and security checks
-
-### Why This Matters
-
-Crypto credentials (private keys, mnemonics, seed phrases) are **permanent secrets** — once leaked, funds can be drained instantly with no recovery. Previous detection focused on API keys (revocable), missing the most critical crypto patterns.
-
-This update ensures wallet keys and seed phrases are treated with the same security rigor as other credentials.
-
-### Technical Details
-
-**Pattern count:** 15 sensitive patterns (up from 9)
-**Detection coverage:** Now includes crypto-native credential types
-**Backward compatible:** Existing scans continue to work
-
 ---
 
 ## Version 1.1.0 (2026-02-05)
 
 ### 🔒 SECURITY FOUNDATION UPDATE
 
-**Major philosophical shift:** This is now positioned as **mandatory core infrastructure**, not an optional convenience tool.
-
-### Added
-
-**CORE-PRINCIPLE.md** - New document establishing:
-- `.env` is MANDATORY, not optional
-- Why centralized credential management is non-negotiable
-- The security rationale for this approach
-- Implementation requirements for all skills
-- Zero exceptions policy
-
-**enforce.py** - New validation script:
-- `require_secure_env()` - Enforce .env security before running
-- `get_credential()` - Safe credential loading with validation
-- Fail-fast system: refuses to run if credentials insecure
-- Can be imported by other skills to enforce standard
-
-### Changed
-
-**SKILL.md:**
-- Updated description to emphasize "MANDATORY" status
-- Added "This Is Not Optional" warning
-- New "The Foundation" section explaining requirements
-- Added "For Skill Developers" section showing enforcement usage
-- Clearer security messaging throughout
-
-**README.md:**
-- Repositioned as "Core Security Infrastructure"
-- Added "Why This Matters" section upfront
-- Emphasized mandatory nature in opening
-- Updated status badge to reflect infrastructure role
-
-### Technical Details
-
-**Package size:** 22 KB (was 15 KB)
-**Files:** 10 total
-- 3 documentation files (SKILL.md, README.md, CORE-PRINCIPLE.md)
-- 5 scripts (scan, consolidate, validate, enforce, cleanup)
-- 2 references (security, supported-services)
-
-### Philosophy
-
-**Before:** "Use this skill to organize your credentials"
-**After:** "Your OpenClaw deployment is non-compliant until credentials are consolidated"
-
-This isn't a feature request. It's a security requirement.
+- Added `CORE-PRINCIPLE.md` establishing mandatory security standard
+- Added `enforce.py` with `require_secure_env()` and `get_credential()`
+- Repositioned as mandatory core infrastructure
 
 ---
 
